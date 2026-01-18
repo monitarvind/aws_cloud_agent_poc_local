@@ -1,0 +1,7 @@
+strands-agents
+strands-agents-tools
+strands-agents-builder
+uv
+chromadb>=0.5
+sentence-transformers>=2.6
+pypdf

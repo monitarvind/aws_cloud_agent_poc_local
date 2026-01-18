@@ -6,7 +6,7 @@ from strands.models import BedrockModel
 from strands_tools import use_aws
 from strands.tools.mcp import MCPClient
 from mcp import StdioServerParameters, stdio_client
-
+from prereq_chromadb_setup import retrieve_chunks, save_to_chroma
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -118,23 +118,36 @@ def create_agent():
 # Main Interaction Loop
 # ---------------------------------------------------------------------------
 def run_agent(agent_instance):
-    """Run an interactive loop with the agent."""
+    """Interactive loop with retrieval + Claude + MCP + persistence"""
     while True:
-        user_input = input("\nEnter your query [or type 'exit' to quit]: ").strip()
-
+        user_input = input("\nEnter your query [or type 'exit']: ").strip()
         if user_input.lower() in ["exit", "quit", "q"]:
-            print("\nGoodbye!!!\n\nRegards,\nAWSMate...\n")
+            print("\nGoodbye!!!\n\nRegards,\nAWSMate\n")
             break
+
+        # Step 1: Check Chroma DB
+        retrieved = retrieve_chunks(user_input, top_k=2)
+        context_text = "\n\n".join([f"[{i+1}] {c['text']}" for i,c in enumerate(retrieved)]) if retrieved else ""
+
+        # Step 2: If context exists, prepend it
+        if context_text:
+            enriched_query = f"Use the following context if relevant:\n{context_text}\n\nUser Question: {user_input}"
+        else:
+            enriched_query = user_input
 
         print("\n" + "="*100)
         print(">>> Agent's Response <<<".center(100))
         print("="*100)
 
-        response = agent_instance(user_input)
+        # Step 3: Run through Strands Agent (Claude + MCP)
+        response = agent_instance(enriched_query)
         if isinstance(response, str):
             print(response)
 
-        print("\n"+"="*100)
+            # Step 4: Save new knowledge into Chroma
+            save_to_chroma(user_input, response, source="Claude+MCP")
+
+        print("\n" + "="*100)
 
 
 # ---------------------------------------------------------------------------
